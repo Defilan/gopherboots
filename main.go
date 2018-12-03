@@ -31,14 +31,16 @@ var authHosts []Host
 var generalHosts []Host
 var knifeHosts []Host
 
+// Report is used for organizing Hosts
 type Report struct {
-	DNS_Hosts     []Host `json:"dns_hosts"`
-	Auth_Hosts    []Host `json:"auth_hosts"`
-	Timeout_Hosts []Host `json:"timeout_hosts"`
-	General_Hosts []Host `json:"general_hosts"`
-	Knife_Hosts   []Host `json:"knife_hosts"`
+	DNSHosts     []Host `json:"dns_hosts"`
+	AuthHosts    []Host `json:"auth_hosts"`
+	TimeoutHosts []Host `json:"timeout_hosts"`
+	GeneralHosts []Host `json:"general_hosts"`
+	KnifeHosts   []Host `json:"knife_hosts"`
 }
 
+// Host is used for organizing Chef elements
 type Host struct {
 	Hostname string `json:"hostname"`
 	Domain   string `json:"domain"`
@@ -46,7 +48,7 @@ type Host struct {
 	RunList  string `json:"runlist"`
 }
 
-func host_validate(hosts []Host) {
+func hostValidate(hosts []Host) {
 	for _, element := range hosts {
 		if element.Hostname == " " {
 			log.Fatal("Please ensure the following entry contains a hostname:", element)
@@ -61,11 +63,10 @@ func host_validate(hosts []Host) {
 			log.Fatal("Please ensure the following entry contains a run list:", element)
 		}
 	}
-	return
 }
 
-func csv_to_hosts(csv_filename string) (hosts []Host) {
-	file, err := os.Open(csv_filename)
+func csvToHosts(csvFilename string) (hosts []Host) {
+	file, err := os.Open(csvFilename)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
@@ -92,11 +93,11 @@ func csv_to_hosts(csv_filename string) (hosts []Host) {
 		fmt.Println("Error:", err)
 		return
 	}
-	host_validate(hosts)
+	hostValidate(hosts)
 	return
 }
 
-func handle_bootstrap_error(out []byte, host Host, exit_code int) (bootstrap_success bool) {
+func handleBootstrapError(out []byte, host Host, exitCode int) (bootstrapSuccess bool) {
 	o := string(out)
 	if strings.Contains(o, "Authentication failed") {
 		authHosts = append(authHosts, host)
@@ -110,18 +111,18 @@ func handle_bootstrap_error(out []byte, host Host, exit_code int) (bootstrap_suc
 		badDNS = append(badDNS, host)
 		return false
 	}
-	if exit_code == 1 {
+	if exitCode == 1 {
 		generalHosts = append(generalHosts, host)
 		return false
 	}
-	if exit_code == 100 {
+	if exitCode == 100 {
 		knifeHosts = append(knifeHosts, host)
 		return false
 	}
 	return true
 }
 
-func run_command(cmd string) (out []byte, exit_code int) {
+func runCommand(cmd string) (out []byte, exitCode int) {
 	c := exec.Command("sh", "-c", cmd)
 	cmdOutput := &bytes.Buffer{}
 	cmdErrorOutput := &bytes.Buffer{}
@@ -139,53 +140,53 @@ func run_command(cmd string) (out []byte, exit_code int) {
 			// defined for both Unix and Windows and in both cases has
 			// an ExitStatus() method with the same signature.
 			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-				exit_code = status.ExitStatus()
+				exitCode = status.ExitStatus()
 			}
 		} else {
 			log.Fatalf("cmd.Wait: %v", err)
 		}
 	}
-	var output_array []byte
-	output_array = append(output_array, cmdErrorOutput.Bytes()...)
-	output_array = append(output_array, cmdOutput.Bytes()...)
-	return output_array, exit_code
+	var outputArray []byte
+	outputArray = append(outputArray, cmdErrorOutput.Bytes()...)
+	outputArray = append(outputArray, cmdOutput.Bytes()...)
+	return outputArray, exitCode
 }
 
 func bootstrap(host Host) {
-	cmd := generate_command(host)
-	cmd_out, exit_code := run_command(cmd)
+	cmd := generateCommand(host)
+	cmdOut, exitCode := runCommand(cmd)
 	filename := strings.Join([]string{"./logs/", host.Hostname, ".txt"}, "")
-	ioutil.WriteFile(filename, cmd_out, 0644)
-	handle_bootstrap_error(cmd_out, host, exit_code)
+	ioutil.WriteFile(filename, cmdOut, 0644)
+	handleBootstrapError(cmdOut, host, exitCode)
 	return
 }
 
-func error_report() (report Report) {
+func errorReport() (report Report) {
 
 	for i := range badDNS {
-		report.DNS_Hosts = append(report.DNS_Hosts, badDNS[i])
+		report.DNSHosts = append(report.DNSHosts, badDNS[i])
 	}
 	for i := range authHosts {
-		report.Auth_Hosts = append(report.Auth_Hosts, authHosts[i])
+		report.AuthHosts = append(report.AuthHosts, authHosts[i])
 	}
 	for i := range timeoutHosts {
-		report.Timeout_Hosts = append(report.Timeout_Hosts, timeoutHosts[i])
+		report.TimeoutHosts = append(report.TimeoutHosts, timeoutHosts[i])
 	}
 	for i := range generalHosts {
-		report.General_Hosts = append(report.General_Hosts, generalHosts[i])
+		report.GeneralHosts = append(report.GeneralHosts, generalHosts[i])
 	}
 	for i := range knifeHosts {
-		report.Knife_Hosts = append(report.Knife_Hosts, knifeHosts[i])
+		report.KnifeHosts = append(report.KnifeHosts, knifeHosts[i])
 	}
 	return report
 }
 
-func generate_command(host Host) (cmd string) {
+func generateCommand(host Host) (cmd string) {
 	fqdn := strings.Join([]string{host.Hostname, host.Domain}, ".")
-	superuser_name := os.Getenv("SUPERUSER_NAME")
-	superuser_pw := os.Getenv("SUPERUSER_PW")
+	superuserName := os.Getenv("superuserName")
+	superuserPw := os.Getenv("superuserPw")
 	//sudo_value := os.Getenv("USE_SUDO")
-	cmd = strings.Join([]string{"knife bootstrap ", fqdn, " -N ", host.Hostname, " -E ", host.ChefEnv, " --sudo", " --ssh-user ", superuser_name, " --ssh-password ", superuser_pw, " -r ", host.RunList}, "")
+	cmd = strings.Join([]string{"knife bootstrap ", fqdn, " -N ", host.Hostname, " -E ", host.ChefEnv, " --sudo", " --ssh-user ", superuserName, " --ssh-password ", superuserPw, " -r ", host.RunList}, "")
 	return
 }
 func worker(queue *goqueue.Queue) {
@@ -211,16 +212,16 @@ func main() {
 
 	// Read in the csv and populate queue for workers
 	var hosts []Host
-	var csv_filename string
+	var csvFilename string
 
-	flag.StringVar(&csv_filename, "file", "./sample.tsv", "file containing hosts to be bootstrapped")
+	flag.StringVar(&csvFilename, "file", "./sample.tsv", "file containing hosts to be bootstrapped")
 	flag.Parse()
-	hosts = csv_to_hosts(csv_filename)
+	hosts = csvToHosts(csvFilename)
 	// Queue all records
 	for i := range hosts {
 		record := hosts[i]
-		recordJson, _ := json.Marshal(record)
-		fmt.Println("Queueing:", string(recordJson))
+		recordJSON, _ := json.Marshal(record)
+		fmt.Println("Queueing:", string(recordJSON))
 		queue.PutNoWait(record)
 	}
 	// Start worker pool
@@ -232,7 +233,7 @@ func main() {
 	}
 	Wg.Wait()
 	if len(knifeHosts) > 0 || len(generalHosts) > 0 || len(badDNS) > 0 || len(timeoutHosts) > 0 || len(authHosts) > 0 {
-		report := error_report()
+		report := errorReport()
 		r, _ := json.MarshalIndent(report, "", "  ")
 		fmt.Println("Error Report:")
 		fmt.Printf("%s/n", r)
