@@ -20,6 +20,7 @@ import (
 	"github.com/Damnever/goqueue"
 )
 
+// Wg is used as a WaitGroup
 var Wg = &sync.WaitGroup{}
 var maxConcurrency = runtime.NumCPU() * 2
 var errored = goqueue.New(0)
@@ -33,7 +34,7 @@ var knifeHosts []Host
 
 // Report is used for organizing Hosts
 type Report struct {
-	DNSHosts     []Host `json:"dns_hosts"`
+	DNSHost      []Host `json:"dns_hosts"`
 	AuthHosts    []Host `json:"auth_hosts"`
 	TimeoutHosts []Host `json:"timeout_hosts"`
 	GeneralHosts []Host `json:"general_hosts"`
@@ -46,6 +47,13 @@ type Host struct {
 	Domain   string `json:"domain"`
 	ChefEnv  string `json:"chefenv"`
 	RunList  string `json:"runlist"`
+}
+
+// check is used to help catch all the craziness
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
 }
 
 func hostValidate(hosts []Host) {
@@ -71,7 +79,10 @@ func csvToHosts(csvFilename string) (hosts []Host) {
 		fmt.Println("Error:", err)
 		return
 	}
-	defer file.Close()
+	defer func() {
+		cerr := file.Close()
+		check(cerr)
+	}()
 	reader := csv.NewReader(file)
 	reader.Comma = '	'
 	// read all records into memory
@@ -156,7 +167,8 @@ func bootstrap(host Host) {
 	cmd := generateCommand(host)
 	cmdOut, exitCode := runCommand(cmd)
 	filename := strings.Join([]string{"./logs/", host.Hostname, ".txt"}, "")
-	ioutil.WriteFile(filename, cmdOut, 0644)
+	err := ioutil.WriteFile(filename, cmdOut, 0644)
+	check(err)
 	handleBootstrapError(cmdOut, host, exitCode)
 	return
 }
@@ -164,7 +176,7 @@ func bootstrap(host Host) {
 func errorReport() (report Report) {
 
 	for i := range badDNS {
-		report.DNSHosts = append(report.DNSHosts, badDNS[i])
+		report.DNSHost = append(report.DNSHost, badDNS[i])
 	}
 	for i := range authHosts {
 		report.AuthHosts = append(report.AuthHosts, authHosts[i])
